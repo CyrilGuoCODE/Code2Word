@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code2Word 转换器</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/components.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 头部 -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1 class="app-title">
+                    <span class="icon">📄</span>
+                    Code2Word 转换器
+                </h1>
+                <div class="header-actions">
+                    <button id="openProjectBtn" class="btn btn-primary">
+                        <span class="icon">📁</span>
+                        打开项目
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主要内容 -->
+        <main class="app-main">
+            <!-- 侧边栏 -->
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <h3>项目配置</h3>
+                    <div class="config-panel" id="configPanel">
+                        <!-- 配置表单将在这里加载 -->
+                    </div>
+                </div>
+                
+                <div class="sidebar-section">
+                    <h3>文档设置</h3>
+                    <div class="document-settings" id="documentSettings">
+                        <!-- 文档设置将在这里加载 -->
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 内容区域 -->
+            <section class="content-area">
+                <!-- 文件树 -->
+                <div class="file-tree-container">
+                    <div class="file-tree-header">
+                        <h3>项目文件</h3>
+                        <div class="file-tree-actions">
+                            <button id="refreshBtn" class="btn btn-small">
+                                <span class="icon">🔄</span>
+                                刷新
+                            </button>
+                            <button id="expandAllBtn" class="btn btn-small">
+                                <span class="icon">📂</span>
+                                展开全部
+                            </button>
+                        </div>
+                    </div>
+                    <div class="file-tree" id="fileTree">
+                        <div class="empty-state">
+                            <p>未选择项目</p>
+                            <p class="text-muted">点击"打开项目"开始使用</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 预览/进度区域 -->
+                <div class="preview-container">
+                    <div class="preview-header">
+                        <h3>文档预览</h3>
+                        <div class="preview-actions">
+                            <button id="previewBtn" class="btn btn-secondary" disabled>
+                                <span class="icon">👁</span>
+                                预览
+                            </button>
+                            <button id="generateBtn" class="btn btn-success" disabled>
+                                <span class="icon">📄</span>
+                                生成文档
+                            </button>
+                        </div>
+                    </div>
+                    <div class="preview-content" id="previewContent">
+                        <div class="empty-state">
+                            <p>文档预览将在此处显示</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 进度模态框 -->
+        <div id="progressModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>正在生成文档</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="progress-info">
+                        <p id="progressText">准备中...</p>
+                        <div class="progress-bar">
+                            <div id="progressFill" class="progress-fill"></div>
+                        </div>
+                        <p id="progressStats" class="text-muted">已处理 0 / 0 个文件</p>
+                    </div>
+                    <div class="progress-errors" id="progressErrors" style="display: none;">
+                        <h4>错误信息：</h4>
+                        <ul id="errorList"></ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="cancelBtn" class="btn btn-secondary">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 状态栏 -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <span id="statusText">就绪</span>
+            </div>
+            <div class="status-right">
+                <span id="fileCount">0 个文件</span>
+                <span class="separator">|</span>
+                <span id="appVersion">v1.0.0</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/components/ConfigPanel.js"></script>
+    <script src="js/components/FileTree.js"></script>
+    <script src="js/components/DocumentPreview.js"></script>
+    <script src="js/components/ProgressModal.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
