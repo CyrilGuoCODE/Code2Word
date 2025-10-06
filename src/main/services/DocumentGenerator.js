@@ -25,27 +25,36 @@ class DocumentGenerator {
   async generateDocument(files, config) {
     try {
       this.resetProgress();
-      
+
       // Filter and prepare files
       const processableFiles = this.filterProcessableFiles(files);
       this.currentProgress.totalFiles = processableFiles.length;
 
-      // Create document
-      const doc = this.createDocument(config);
-      
+      const allChildren = [];
+
       // Add table of contents if enabled
       if (config.documentSettings.tableOfContents.enabled) {
-        this.addTableOfContents(doc, config);
+        allChildren.push(
+          new Paragraph({
+            text: 'Table of Contents',
+            heading: HeadingLevel.HEADING_1
+          }),
+          new Paragraph({
+            text: '(Table of contents will be generated when document is opened in Word)',
+            style: 'code'
+          }),
+          new Paragraph({ text: '' }) // Empty paragraph for spacing
+        );
       }
 
-      // Process each file
       for (let i = 0; i < processableFiles.length; i++) {
         const file = processableFiles[i];
         this.currentProgress.currentFile = file.name;
         this.currentProgress.processedFiles = i;
 
         try {
-          await this.addFileSection(doc, file, config);
+          const fileContent = await this.generateFileContent(file, config, i === processableFiles.length - 1);
+          allChildren.push(...fileContent);
         } catch (error) {
           this.currentProgress.errors.push({
             file: file.path,
@@ -57,15 +66,17 @@ class DocumentGenerator {
         this.emitProgress();
       }
 
+      const doc = this.createDocumentWithContent(config, allChildren);
+
       // Generate output path
       const outputPath = this.generateOutputPath(config);
-      
+
       // Save document
       const buffer = await Packer.toBuffer(doc);
       await fs.writeFile(outputPath, buffer);
 
       this.currentProgress.processedFiles = processableFiles.length;
-      
+
       return {
         success: true,
         outputPath,
@@ -87,7 +98,7 @@ class DocumentGenerator {
    */
   async generatePreview(files, config) {
     const processableFiles = this.filterProcessableFiles(files);
-    
+
     return {
       fileCount: processableFiles.length,
       estimatedPages: Math.ceil(processableFiles.length * 2.5), // Rough estimate
@@ -125,7 +136,7 @@ class DocumentGenerator {
    */
   createDocument(config) {
     const { documentSettings } = config;
-    
+
     return new Document({
       creator: documentSettings.author,
       title: documentSettings.title,
@@ -175,7 +186,7 @@ class DocumentGenerator {
    */
   async addFileSection(doc, file, config) {
     const { documentSettings } = config;
-    
+
     // Add file header
     const fileHeader = new Paragraph({
       text: `File: ${file.relativePath}`,
@@ -198,11 +209,11 @@ class DocumentGenerator {
         const FileSystemService = require('./FileSystemService');
         const fsService = new FileSystemService();
         const fileContent = await fsService.readFileContent(file.path);
-        
+
         if (!fileContent.binary && !fileContent.truncated) {
           const contentParagraphs = this.formatCodeContent(
-            fileContent.content, 
-            file.extension, 
+            fileContent.content,
+            file.extension,
             documentSettings.formatting
           );
           children.push(...contentParagraphs);
@@ -220,18 +231,22 @@ class DocumentGenerator {
       }
     }
 
-    // Add page break if configured
     if (documentSettings.formatting.pageBreakBetweenFiles) {
       children.push(new Paragraph({
         text: '',
         pageBreakBefore: true
       }));
+    } else {
+      children.push(new Paragraph({
+        text: '',
+        spacing: { after: 400 }
+      }));
     }
 
-    // Add section to document
     if (doc.sections && doc.sections.length > 0) {
       doc.sections[0].children.push(...children);
     } else {
+      // Create first section
       doc.addSection({
         children: children
       });
@@ -243,10 +258,10 @@ class DocumentGenerator {
   formatCodeContent(content, extension, formatting) {
     const paragraphs = [];
     const lines = content.split('\n');
-    
+
     // Detect language for syntax highlighting
     const language = this.detectLanguage(extension);
-    
+
     if (formatting.syntaxHighlighting && language && hljs.getLanguage(language)) {
       try {
         const highlighted = hljs.highlight(content, { language });
@@ -327,7 +342,7 @@ class DocumentGenerator {
    */
   filterProcessableFiles(files) {
     const processable = [];
-    
+
     const traverse = (nodes) => {
       for (const node of nodes) {
         if (node.type === 'file' && !node.excluded) {
@@ -360,7 +375,7 @@ class DocumentGenerator {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const projectName = path.basename(config.projectPath) || 'project';
     const fileName = `${projectName}_${timestamp}.docx`;
-    
+
     return path.join(config.outputPath, fileName);
   }
 
@@ -369,11 +384,11 @@ class DocumentGenerator {
    */
   formatFileSize(bytes) {
     if (bytes === 0) return '0 B';
-    
+
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
+
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
@@ -404,6 +419,98 @@ class DocumentGenerator {
    */
   getProgress() {
     return { ...this.currentProgress };
+  }
+
+  createDocumentWithContent(config, children) {
+    const { documentSettings } = config;
+
+    return new Document({
+      creator: documentSettings.author,
+      title: documentSettings.title,
+      description: 'Generated by Code2Word Converter',
+      styles: {
+        paragraphStyles: [
+          {
+            id: 'code',
+            name: 'Code',
+            basedOn: 'Normal',
+            run: {
+              font: documentSettings.formatting.codeFont,
+              size: documentSettings.formatting.codeFontSize * 2 // docx uses half-points
+            },
+            paragraph: {
+              spacing: { before: 100, after: 100 }
+            }
+          }
+        ]
+      },
+      sections: [
+        {
+          children: children
+        }
+      ]
+    });
+  }
+
+  async generateFileContent(file, config, isLastFile = false) {
+    const { documentSettings } = config;
+    const children = [];
+
+    children.push(new Paragraph({
+      text: `File: ${file.relativePath}`,
+      heading: HeadingLevel.HEADING_2
+    }));
+
+    children.push(new Paragraph({
+      children: [
+        new TextRun(`Size: ${this.formatFileSize(file.size)} | `),
+        new TextRun(`Modified: ${new Date(file.modified).toLocaleString()}`)
+      ]
+    }));
+
+    if (file.type === 'file' && !file.isBinary) {
+      try {
+        const FileSystemService = require('./FileSystemService');
+        const fsService = new FileSystemService();
+        const fileContent = await fsService.readFileContent(file.path);
+
+        if (!fileContent.binary && !fileContent.truncated) {
+          const contentParagraphs = this.formatCodeContent(
+            fileContent.content,
+            file.extension,
+            documentSettings.formatting
+          );
+          children.push(...contentParagraphs);
+        } else {
+          children.push(new Paragraph({
+            text: fileContent.binary ? '[Binary file]' : '[File too large]',
+            style: 'code'
+          }));
+        }
+      } catch (error) {
+        children.push(new Paragraph({
+          text: `[Error reading file: ${error.message}]`,
+          style: 'code'
+        }));
+      }
+    }
+
+    if (!isLastFile) {
+      if (documentSettings.formatting.pageBreakBetweenFiles) {
+        children.push(new Paragraph({
+          text: '',
+          pageBreakBefore: true
+        }));
+      } else {
+        children.push(
+          new Paragraph({ text: '' }),
+          new Paragraph({ text: '─'.repeat(50) }),
+          new Paragraph({ text: '' })
+        );
+      }
+    }
+
+    return children;
   }
 }
 
