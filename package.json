@@ -1,17 +1,12 @@
 {
   "name": "code2word-converter",
   "version": "1.0.0",
-  "description": "Convert code projects to Word documents with intelligent file filtering and formatting",
+  "description": "用于快速自动将代码文件转为Word文档",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
     "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux",
-    "test": "jest",
-    "test:watch": "jest --watch",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write src/"
@@ -25,8 +20,8 @@
     "gitignore",
     "project"
   ],
-  "author": "Code2Word Team",
-  "license": "MIT",
+  "author": "CyrilGuo",
+  "license": "Apache License2.0",
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
@@ -58,15 +53,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
-    },
-    "mac": {
-      "target": "dmg",
-      "icon": "assets/icon.icns"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "assets/icon.png"
+      "icon": "icon.ico"
     }
   }
 }
