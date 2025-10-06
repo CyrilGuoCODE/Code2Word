@@ -3,6 +3,8 @@
  * Secure bridge between main and renderer processes
  */
 
+console.log('Preload script is loading...');
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose protected methods that allow the renderer process to use
@@ -55,4 +57,10 @@ contextBridge.exposeInMainWorld('osAPI', {
   arch: () => process.arch,
   homedir: () => os.homedir(),
   tmpdir: () => os.tmpdir()
+});
+
+console.log('Preload script loaded successfully. APIs exposed:', {
+  electronAPI: typeof electronAPI !== 'undefined',
+  pathAPI: typeof pathAPI !== 'undefined',
+  osAPI: typeof osAPI !== 'undefined'
 });

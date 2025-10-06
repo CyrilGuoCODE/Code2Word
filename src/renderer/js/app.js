@@ -13,6 +13,23 @@ class Code2WordApp {
 
   async init() {
     try {
+      // Debug: Check what APIs are available
+      console.log('Available APIs:', {
+        electronAPI: typeof electronAPI,
+        pathAPI: typeof pathAPI,
+        osAPI: typeof osAPI
+      });
+      
+      // Check if electronAPI is available
+      if (typeof electronAPI === 'undefined') {
+        throw new Error('electronAPI 未定义，请检查预加载脚本');
+      }
+      
+      // Check if pathAPI is available
+      if (typeof pathAPI === 'undefined') {
+        console.warn('pathAPI 未定义，将使用备用方案');
+      }
+      
       // Load default configuration
       this.currentConfig = await electronAPI.getDefaultConfig();
       
@@ -24,10 +41,10 @@ class Code2WordApp {
       const version = await electronAPI.getVersion();
       document.getElementById('appVersion').textContent = `v${version}`;
       
-      console.log('Code2Word app initialized');
+      console.log('Code2Word 应用初始化完成');
     } catch (error) {
-      console.error('Failed to initialize app:', error);
-      showNotification('Failed to initialize application', 'error');
+      console.error('应用初始化失败:', error);
+      showNotification('应用初始化失败: ' + error.message, 'error');
     }
   }
 
@@ -98,16 +115,25 @@ class Code2WordApp {
       this.currentProject = projectPath;
       this.currentConfig.projectPath = projectPath;
       
-      // Update UI
-      this.updateStatusText(`项目: ${pathAPI.basename(projectPath)}`);
+      // Update UI - use fallback if pathAPI is not available
+      let projectName = projectPath;
+      if (typeof pathAPI !== 'undefined') {
+        projectName = pathAPI.basename(projectPath);
+      } else {
+        // Fallback: extract project name manually
+        const parts = projectPath.replace(/\\/g, '/').split('/');
+        projectName = parts[parts.length - 1] || projectPath;
+      }
+      
+      this.updateStatusText(`项目: ${projectName}`);
       
       // Scan project files
       await this.scanProject();
       
       showNotification('项目加载成功', 'success');
     } catch (error) {
-      console.error('Failed to set project:', error);
-      showNotification('项目加载失败', 'error');
+      console.error('设置项目失败:', error);
+      showNotification('设置项目失败: ' + error.message, 'error');
     }
   }
 
@@ -127,10 +153,15 @@ class Code2WordApp {
       this.updateFileCount();
       this.updateButtons();
       
+      // 自动生成预览
+      if (this.fileTree && this.countFiles(this.fileTree) > 0) {
+        await this.previewDocument();
+      }
+      
       this.updateStatusText('就绪');
     } catch (error) {
-      console.error('Failed to scan project:', error);
-      showNotification('扫描项目文件失败', 'error');
+      console.error('扫描项目失败:', error);
+      showNotification('扫描项目失败: ' + error.message, 'error');
       this.updateStatusText('错误');
     }
   }
@@ -200,23 +231,49 @@ class Code2WordApp {
 
   showPreview(preview) {
     const container = document.getElementById('previewContent');
-    container.innerHTML = `
-      <div class="preview-summary">
-        <h4>Document Preview</h4>
-        <p><strong>Files to include:</strong> ${preview.fileCount}</p>
-        <p><strong>Estimated pages:</strong> ${preview.estimatedPages}</p>
-        <p><strong>Document title:</strong> ${preview.settings.title}</p>
-        <p><strong>Author:</strong> ${preview.settings.author}</p>
-      </div>
-      <div class="preview-structure">
-        <h5>File Structure:</h5>
-        <ul>
-          ${preview.structure.map(file => `
-            <li>${file.name} (${formatFileSize(file.size)})</li>
-          `).join('')}
-        </ul>
-      </div>
-    `;
+    
+    if (!preview) {
+      // 如果没有预览数据，生成一个简单的预览
+      const fileCount = this.countFiles(this.fileTree);
+      const includedFiles = this.getIncludedFiles(this.fileTree);
+      
+      container.innerHTML = `
+        <div class="preview-summary">
+          <h4>文档预览</h4>
+          <p><strong>包含文件数:</strong> ${fileCount}</p>
+          <p><strong>预估页数:</strong> ${Math.ceil(fileCount / 5)}</p>
+          <p><strong>文档标题:</strong> ${this.currentConfig.documentTitle || '代码项目文档'}</p>
+          <p><strong>作者:</strong> ${this.currentConfig.author || 'Code2Word 转换器'}</p>
+        </div>
+        <div class="preview-structure">
+          <h5>文件结构:</h5>
+          <ul>
+            ${includedFiles.slice(0, 10).map(file => `
+              <li>${file.relativePath} (${this.formatFileSize(file.size)})</li>
+            `).join('')}
+            ${includedFiles.length > 10 ? `<li>... 还有 ${includedFiles.length - 10} 个文件</li>` : ''}
+          </ul>
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <div class="preview-summary">
+          <h4>文档预览</h4>
+          <p><strong>包含文件数:</strong> ${preview.fileCount}</p>
+          <p><strong>预估页数:</strong> ${preview.estimatedPages}</p>
+          <p><strong>文档标题:</strong> ${preview.settings.title}</p>
+          <p><strong>作者:</strong> ${preview.settings.author}</p>
+        </div>
+        <div class="preview-structure">
+          <h5>文件结构:</h5>
+          <ul>
+            ${preview.structure.map(file => `
+              <li>${file.name} (${this.formatFileSize(file.size)})</li>
+            `).join('')}
+          </ul>
+        </div>
+      `;
+    }
   }
 
   async generateDocument() {
@@ -347,6 +404,28 @@ class Code2WordApp {
     // Update UI based on current state
     this.updateButtons();
     this.updateFileCount();
+  }
+
+  getIncludedFiles(nodes) {
+    const files = [];
+    nodes.forEach(node => {
+      if (node.type === 'file' && !node.excluded) {
+        files.push(node);
+      } else if (node.type === 'directory' && node.children) {
+        files.push(...this.getIncludedFiles(node.children));
+      }
+    });
+    return files;
+  }
+
+  formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 }
 

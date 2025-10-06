@@ -101,10 +101,8 @@ class FileSystemService {
     // 添加默认忽略规则
     ig.add([
       '.git/',
-      'node_modules/',
       '.DS_Store',
-      'Thumbs.db',
-      '*.log'
+      'Thumbs.db'
     ]);
 
     // 如果启用了 .gitignore，则加载 .gitignore 文件
@@ -162,21 +160,140 @@ class FileSystemService {
    * 解析 .gitignore 文件内容
    */
   parseGitignoreContent(content) {
-    return content
-      .split(/\r?\n/) // 支持不同的换行符
-      .map(line => {
-        // 移除行尾空格但保留行首空格（可能有意义）
-        line = line.replace(/\s+$/, '');
-        return line;
-      })
+    // 首先尝试正常的换行符分割
+    let lines = content.split(/\r?\n/);
+    
+    // 如果只有一行但包含多个规则（没有换行符），尝试智能分割
+    if (lines.length === 1 && lines[0].length > 30) {
+      const singleLine = lines[0];
+      console.log('检测到可能连接的 gitignore 规则:', singleLine);
+      
+      // 智能解析连接的 gitignore 规则
+      console.log('检测到连接的 gitignore 规则:', singleLine);
+      
+      const patterns = [];
+      let i = 0;
+      let current = '';
+      
+      // 移除开头的 * 如果存在
+      const cleanLine = singleLine.replace(/^\*/, '');
+      
+      while (i < cleanLine.length) {
+        const char = cleanLine[i];
+        
+        if (char === '!' && current.length > 0) {
+          // 遇到新的否定规则，保存当前规则
+          if (current.trim()) {
+            patterns.push(current.trim());
+          }
+          current = '!';
+        } else if (char === '*' && cleanLine[i + 1] === '*' && current.length > 0 && !current.endsWith('*')) {
+          // 遇到新的 ** 规则，保存当前规则
+          if (current.trim()) {
+            patterns.push(current.trim());
+          }
+          current = '**';
+          i++; // 跳过第二个 *
+        } else if (this.isNewRuleStart(cleanLine, i, current)) {
+          // 检测到新规则开始
+          if (current.trim()) {
+            patterns.push(current.trim());
+          }
+          current = char;
+        } else {
+          current += char;
+        }
+        
+        i++;
+      }
+      
+      // 添加最后一个规则
+      if (current.trim()) {
+        patterns.push(current.trim());
+      }
+      
+      console.log('智能解析的规则:', patterns);
+      
+      console.log('分割后的规则:', patterns);
+      lines = patterns;
+    }
+    
+    return lines
+      .map(line => line.trim())
       .filter(line => {
-        // 过滤空行和注释行
-        return line && !line.startsWith('#');
+        // 过滤空行、注释行和单独的 * 规则
+        return line && !line.startsWith('#') && line !== '*';
       })
       .map(line => {
-        // 处理特殊字符转义
+        // 确保路径格式正确
         return line;
       });
+  }
+
+  /**
+   * 检查规则是否看起来完整
+   */
+  looksLikeCompleteRule(rule) {
+    // 简单的启发式检查
+    return rule.length > 3 && (
+      rule.includes('.') || // 包含文件扩展名
+      rule.endsWith('/') || // 目录规则
+      rule.includes('**') || // 通配符规则
+      rule.startsWith('!') // 否定规则
+    );
+  }
+
+  /**
+   * 检查位置是否是规则结束
+   */
+  isRuleEnd(str, index) {
+    const char = str[index];
+    // 检查是否是文件扩展名结尾、目录结尾或其他规则结尾标志
+    return char === '/' || char === '*' || /\w$/.test(char);
+  }
+
+  /**
+   * 检查是否是路径开始
+   */
+  isPathStart(str, index) {
+    const char = str[index];
+    const nextChars = str.substring(index, index + 10);
+    
+    // 检查常见的路径开始模式
+    return (
+      /^[a-zA-Z]/.test(char) && // 字母开头
+      (
+        nextChars.includes('/') || // 包含路径分隔符
+        nextChars.includes('*') || // 包含通配符
+        nextChars.includes('.') || // 包含文件扩展名
+        /^[a-zA-Z]+$/.test(nextChars.split(/[\/\*\.]/)[0]) // 是有效的文件/目录名
+      )
+    );
+  }
+
+  /**
+   * 检查是否是新规则的开始
+   */
+  isNewRuleStart(str, index, currentRule) {
+    const char = str[index];
+    const prevChar = index > 0 ? str[index - 1] : '';
+    const nextFew = str.substring(index, index + 10);
+    
+    // 如果当前规则为空，不是新规则开始
+    if (!currentRule.trim()) {
+      return false;
+    }
+    
+    // 检查是否是已知的规则开始模式
+    const knownStarts = ['server/', 'display/', 'Docx/', '*.log'];
+    
+    for (const start of knownStarts) {
+      if (nextFew.startsWith(start) && this.looksLikeCompleteRule(currentRule)) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   /**
@@ -235,8 +352,41 @@ class FileSystemService {
       }
     }
 
-    // 使用原始路径和标准化路径检查忽略过滤器
-    if (ignoreFilter.ignores(normalizedPath) || ignoreFilter.ignores(relativePath)) {
+    // 生成多种路径格式进行检查
+    const pathsToCheck = [];
+    
+    // 清理路径，移除开头的 ./
+    const cleanPath = normalizedPath.replace(/^\.\//, '');
+    
+    pathsToCheck.push(cleanPath);
+    if (cleanPath !== normalizedPath) {
+      pathsToCheck.push(normalizedPath);
+    }
+    if (cleanPath !== relativePath) {
+      pathsToCheck.push(relativePath);
+    }
+
+    // 如果是目录，也检查带斜杠的版本
+    if (fullPath) {
+      try {
+        const stats = fs.statSync(fullPath);
+        if (stats.isDirectory()) {
+          pathsToCheck.push(cleanPath + '/');
+          if (cleanPath !== normalizedPath) {
+            pathsToCheck.push(normalizedPath + '/');
+          }
+        }
+      } catch (error) {
+        // 忽略错误，继续检查
+      }
+    }
+
+    // 使用 ignore 库的正确方式检查
+    // ignore 库会自动处理否定规则
+    const isIgnored = ignoreFilter.ignores(cleanPath);
+    
+    if (isIgnored) {
+      console.log(`路径 ${relativePath} 被排除`);
       return { excluded: true, reason: 'Gitignore 或自定义排除规则' };
     }
 

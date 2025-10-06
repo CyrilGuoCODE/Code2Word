@@ -53,6 +53,9 @@ class Code2WordApp {
   }
 
   createMainWindow() {
+    const preloadPath = path.join(__dirname, '../preload/preload.js');
+    console.log('Preload script path:', preloadPath);
+    
     this.mainWindow = new BrowserWindow({
       width: 1200,
       height: 800,
@@ -62,7 +65,8 @@ class Code2WordApp {
         nodeIntegration: false,
         contextIsolation: true,
         enableRemoteModule: false,
-        preload: path.join(__dirname, '../preload/preload.js')
+        preload: preloadPath,
+        sandbox: false
       },
       icon: path.join(__dirname, '../../assets/icon.png'),
       show: false

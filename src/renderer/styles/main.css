@@ -43,7 +43,6 @@ body {
   line-height: 1.5;
   color: var(--text-primary);
   background-color: var(--bg-primary);
-  overflow: hidden;
 }
 
 /* Layout */
@@ -139,6 +138,7 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: var(--spacing-md);
+  max-height: calc(100vh - 400px);
 }
 
 .preview-container {
@@ -171,6 +171,7 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: var(--spacing-md);
+  max-height: 250px;
 }
 
 .status-bar {
