@@ -32,7 +32,7 @@ class FileSystemService {
 
       const ignoreFilter = await this.createIgnoreFilter(directoryPath, exclusionRules);
       const fileTree = await this.buildFileTree(directoryPath, ignoreFilter, exclusionRules);
-      
+
       return fileTree;
     } catch (error) {
       throw new Error(`扫描目录失败: ${error.message}`);
@@ -45,7 +45,7 @@ class FileSystemService {
   async readFileContent(filePath) {
     try {
       const stats = await fs.stat(filePath);
-      
+
       // 检查文件是否过大 (>10MB)
       if (stats.size > 10 * 1024 * 1024) {
         return {
@@ -73,10 +73,10 @@ class FileSystemService {
     } catch (error) {
       throw new Error(`读取文件失败: ${error.message}`);
     }
-  }  
-/**
-   * 获取文件统计信息
-   */
+  }
+  /**
+     * 获取文件统计信息
+     */
   async getFileStats(filePath) {
     try {
       const stats = await fs.stat(filePath);
@@ -123,14 +123,14 @@ class FileSystemService {
    */
   async loadGitignoreFiles(directoryPath, ig) {
     const gitignorePath = path.join(directoryPath, '.gitignore');
-    
+
     try {
       if (await fs.pathExists(gitignorePath)) {
         const gitignoreContent = await fs.readFile(gitignorePath, 'utf8');
-        
+
         // 更精确地解析 gitignore 内容
         const lines = this.parseGitignoreContent(gitignoreContent);
-        
+
         if (lines.length > 0) {
           console.log('加载 .gitignore 规则:', lines);
           ig.add(lines);
@@ -146,7 +146,7 @@ class FileSystemService {
       if (await fs.pathExists(globalGitignore)) {
         const globalContent = await fs.readFile(globalGitignore, 'utf8');
         const lines = this.parseGitignoreContent(globalContent);
-        
+
         if (lines.length > 0) {
           ig.add(lines);
         }
@@ -162,25 +162,25 @@ class FileSystemService {
   parseGitignoreContent(content) {
     // 首先尝试正常的换行符分割
     let lines = content.split(/\r?\n/);
-    
+
     // 如果只有一行但包含多个规则（没有换行符），尝试智能分割
     if (lines.length === 1 && lines[0].length > 30) {
       const singleLine = lines[0];
       console.log('检测到可能连接的 gitignore 规则:', singleLine);
-      
+
       // 智能解析连接的 gitignore 规则
       console.log('检测到连接的 gitignore 规则:', singleLine);
-      
+
       const patterns = [];
       let i = 0;
       let current = '';
-      
+
       // 移除开头的 * 如果存在
       const cleanLine = singleLine.replace(/^\*/, '');
-      
+
       while (i < cleanLine.length) {
         const char = cleanLine[i];
-        
+
         if (char === '!' && current.length > 0) {
           // 遇到新的否定规则，保存当前规则
           if (current.trim()) {
@@ -203,21 +203,21 @@ class FileSystemService {
         } else {
           current += char;
         }
-        
+
         i++;
       }
-      
+
       // 添加最后一个规则
       if (current.trim()) {
         patterns.push(current.trim());
       }
-      
+
       console.log('智能解析的规则:', patterns);
-      
+
       console.log('分割后的规则:', patterns);
       lines = patterns;
     }
-    
+
     return lines
       .map(line => line.trim())
       .filter(line => {
@@ -258,7 +258,7 @@ class FileSystemService {
   isPathStart(str, index) {
     const char = str[index];
     const nextChars = str.substring(index, index + 10);
-    
+
     // 检查常见的路径开始模式
     return (
       /^[a-zA-Z]/.test(char) && // 字母开头
@@ -278,21 +278,21 @@ class FileSystemService {
     const char = str[index];
     const prevChar = index > 0 ? str[index - 1] : '';
     const nextFew = str.substring(index, index + 10);
-    
+
     // 如果当前规则为空，不是新规则开始
     if (!currentRule.trim()) {
       return false;
     }
-    
+
     // 检查是否是已知的规则开始模式
     const knownStarts = ['server/', 'display/', 'Docx/', '*.log'];
-    
+
     for (const start of knownStarts) {
       if (nextFew.startsWith(start) && this.looksLikeCompleteRule(currentRule)) {
         return true;
       }
     }
-    
+
     return false;
   }
 
@@ -306,10 +306,10 @@ class FileSystemService {
     for (const item of items) {
       const fullPath = path.join(dirPath, item);
       const itemRelativePath = path.join(relativePath, item).replace(/\\/g, '/');
-      
+
       // 检查项目是否应该被排除
       const exclusionResult = this.shouldExclude(itemRelativePath, ignoreFilter, exclusionRules, fullPath);
-      
+
       const stats = await fs.stat(fullPath);
       const node = {
         path: fullPath,
@@ -336,14 +336,14 @@ class FileSystemService {
     }
 
     return fileNodes;
-  }  
-/**
-   * 检查文件/目录是否应该被排除
-   */
+  }
+  /**
+     * 检查文件/目录是否应该被排除
+     */
   shouldExclude(relativePath, ignoreFilter, exclusionRules, fullPath = null) {
     // 标准化路径以确保一致的检查
     const normalizedPath = relativePath.replace(/\\/g, '/');
-    
+
     // 首先检查自定义包含规则（最高优先级）
     if (exclusionRules.customInclusions && exclusionRules.customInclusions.length > 0) {
       const includeFilter = ignore().add(exclusionRules.customInclusions);
@@ -354,10 +354,10 @@ class FileSystemService {
 
     // 生成多种路径格式进行检查
     const pathsToCheck = [];
-    
+
     // 清理路径，移除开头的 ./
     const cleanPath = normalizedPath.replace(/^\.\//, '');
-    
+
     pathsToCheck.push(cleanPath);
     if (cleanPath !== normalizedPath) {
       pathsToCheck.push(normalizedPath);
@@ -384,7 +384,7 @@ class FileSystemService {
     // 使用 ignore 库的正确方式检查
     // ignore 库会自动处理否定规则
     const isIgnored = ignoreFilter.ignores(cleanPath);
-    
+
     if (isIgnored) {
       console.log(`路径 ${relativePath} 被排除`);
       return { excluded: true, reason: 'Gitignore 或自定义排除规则' };
@@ -395,9 +395,9 @@ class FileSystemService {
       try {
         const stats = fs.statSync(fullPath);
         if (stats.size > exclusionRules.maxFileSize) {
-          return { 
-            excluded: true, 
-            reason: `文件大小超过 ${this.formatFileSize(exclusionRules.maxFileSize)}` 
+          return {
+            excluded: true,
+            reason: `文件大小超过 ${this.formatFileSize(exclusionRules.maxFileSize)}`
           };
         }
       } catch (error) {
@@ -418,11 +418,11 @@ class FileSystemService {
    */
   formatFileSize(bytes) {
     if (bytes === 0) return '0 B';
-    
+
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
+
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
@@ -431,11 +431,23 @@ class FileSystemService {
    */
   isBinaryFile(filePath) {
     const ext = path.extname(filePath).toLowerCase();
-    
-    // 已知的二进制扩展名
+
+    const textExtensions = new Set([
+      '.js', '.ts', '.jsx', '.tsx', '.vue', '.py', '.java', '.c', '.cpp', '.h', '.hpp',
+      '.cs', '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.scala', '.clj', '.hs',
+      '.ml', '.fs', '.vb', '.pl', '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat',
+      '.cmd', '.html', '.htm', '.css', '.scss', '.sass', '.less', '.xml', '.json',
+      '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.md', '.txt', '.sql',
+      '.r', '.m', '.mm', '.dart', '.lua', '.vim', '.el', '.lisp', '.scm', '.rkt'
+    ]);
+
+    if (textExtensions.has(ext)) {
+      return false;
+    }
+
     const binaryExtensions = new Set([
       '.exe', '.dll', '.so', '.dylib', '.bin', '.dat', '.db', '.sqlite', '.sqlite3',
-      '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.ico', '.svg', '.webp', '.tiff',
+      '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.ico', '.webp', '.tiff',
       '.mp3', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.ogg', '.wav',
       '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.zip', '.rar',
       '.7z', '.tar', '.gz', '.bz2', '.xz', '.dmg', '.iso', '.img', '.deb', '.rpm'
@@ -447,8 +459,21 @@ class FileSystemService {
 
     // 检查 MIME 类型
     const mimeType = mime.lookup(filePath);
-    if (mimeType && !mimeType.startsWith('text/') && !mimeType.includes('json') && !mimeType.includes('xml')) {
-      return true;
+    if (mimeType) {
+      if (mimeType.startsWith('text/') ||
+        mimeType.includes('json') ||
+        mimeType.includes('xml') ||
+        mimeType.includes('javascript') ||
+        mimeType.includes('typescript')) {
+        return false;
+      }
+
+      if (mimeType.startsWith('image/') ||
+        mimeType.startsWith('audio/') ||
+        mimeType.startsWith('video/') ||
+        mimeType.startsWith('application/octet-stream')) {
+        return true;
+      }
     }
 
     return false;
