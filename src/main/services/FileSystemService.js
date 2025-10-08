@@ -18,6 +18,19 @@ class FileSystemService {
       '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.md', '.txt', '.sql',
       '.r', '.m', '.mm', '.dart', '.lua', '.vim', '.el', '.lisp', '.scm', '.rkt'
     ]);
+    
+    this.binaryExtensions = [
+      '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg', // 图片
+      '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.pptx', '.md', // 文档
+      '.zip', '.rar', '.tar', '.gz', // 压缩文件
+      '.exe', '.dll', '.so', '.dylib', // 可执行文件
+      '.class', '.jar', // Java
+      '.pyc', '.pyo', // Python 编译文件
+      '.db', '.sqlite', // 数据库
+      '.mp3', '.mp4', '.avi', '.mov', // 媒体文件
+      '.ttf', '.otf', '.woff', '.woff2', // 字体
+      '.txt' // 其他
+    ];
   }
 
   /**
@@ -30,13 +43,93 @@ class FileSystemService {
         throw new Error('路径不是目录');
       }
 
-      const ignoreFilter = await this.createIgnoreFilter(directoryPath, exclusionRules);
-      const fileTree = await this.buildFileTree(directoryPath, ignoreFilter, exclusionRules);
-
+      // 使用简化的忽略过滤器
+      const ig = ignore();
+      
+      // 尝试读取 .gitignore 文件
+      try {
+        const gitignorePath = path.join(directoryPath, '.gitignore');
+        if (await fs.pathExists(gitignorePath)) {
+          const gitignoreContent = await fs.readFile(gitignorePath, 'utf8');
+          ig.add(gitignoreContent);
+        }
+      } catch (error) {
+        console.warn('无法读取 .gitignore 文件:', error.message);
+      }
+      
+      // 添加默认忽略规则
+      ig.add('*.min.js\n.gitignore\npackage-lock.json');
+      
+      const allFiles = this.walkDirectory(directoryPath, ig);
+      
+      // 转换为文件树格式
+      const fileTree = this.convertToFileTree(allFiles, directoryPath);
       return fileTree;
     } catch (error) {
       throw new Error(`扫描目录失败: ${error.message}`);
     }
+  }
+
+  /**
+   * 递归遍历目录，使用简化的过滤逻辑
+   */
+  walkDirectory(dir, ig, fileList = [], basePath = null) {
+    if (!basePath) basePath = dir;
+    
+    const files = fs.readdirSync(dir);
+
+    files.forEach(file => {
+        const filePath = path.join(dir, file);
+        const relativePath = path.relative(basePath, filePath);
+
+        // 检查是否应该忽略
+        if (!fs.statSync(filePath).isDirectory() && (ig.ignores(relativePath) || this.binaryExtensions.includes(path.extname(relativePath)))) {
+            return;
+        }
+
+        if (fs.statSync(filePath).isDirectory()) {
+            this.walkDirectory(filePath, ig, fileList, basePath);
+        } else {
+            fileList.push(relativePath);
+        }
+    });
+
+    return fileList;
+  }
+
+  /**
+   * 将文件列表转换为文件树结构
+   */
+  convertToFileTree(fileList, basePath) {
+    const tree = [];
+
+    fileList.forEach(relativePath => {
+      const fullPath = path.resolve(basePath, relativePath);
+      
+      try {
+        const stats = fs.statSync(fullPath);
+        
+        const node = {
+          path: fullPath,
+          relativePath: relativePath.replace(/\\/g, '/'),
+          name: path.basename(relativePath),
+          type: 'file',
+          size: stats.size,
+          modified: stats.mtime,
+          excluded: false,
+          exclusionReason: null,
+          extension: path.extname(relativePath),
+          isSupported: this.supportedExtensions.has(path.extname(relativePath)),
+          isBinary: this.binaryExtensions.includes(path.extname(relativePath))
+        };
+
+        tree.push(node);
+      } catch (error) {
+        console.warn(`无法访问文件 ${fullPath}:`, error.message);
+      }
+    });
+
+    return tree;
   }
 
   /**
@@ -445,15 +538,9 @@ class FileSystemService {
       return false;
     }
 
-    const binaryExtensions = new Set([
-      '.exe', '.dll', '.so', '.dylib', '.bin', '.dat', '.db', '.sqlite', '.sqlite3',
-      '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.ico', '.webp', '.tiff',
-      '.mp3', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.ogg', '.wav',
-      '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.zip', '.rar',
-      '.7z', '.tar', '.gz', '.bz2', '.xz', '.dmg', '.iso', '.img', '.deb', '.rpm'
-    ]);
+    
 
-    if (binaryExtensions.has(ext)) {
+    if (this.binaryExtensions.includes(ext)) {
       return true;
     }
 

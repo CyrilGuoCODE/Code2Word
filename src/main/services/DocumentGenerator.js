@@ -30,22 +30,7 @@ class DocumentGenerator {
       const processableFiles = this.filterProcessableFiles(files);
       this.currentProgress.totalFiles = processableFiles.length;
 
-      const allChildren = [];
-
-      // Add table of contents if enabled
-      if (config.documentSettings.tableOfContents.enabled) {
-        allChildren.push(
-          new Paragraph({
-            text: 'Table of Contents',
-            heading: HeadingLevel.HEADING_1
-          }),
-          new Paragraph({
-            text: '(Table of contents will be generated when document is opened in Word)',
-            style: 'code'
-          }),
-          new Paragraph({ text: '' }) // Empty paragraph for spacing
-        );
-      }
+      let paragraphs = [];
 
       for (let i = 0; i < processableFiles.length; i++) {
         const file = processableFiles[i];
@@ -53,8 +38,30 @@ class DocumentGenerator {
         this.currentProgress.processedFiles = i;
 
         try {
-          const fileContent = await this.generateFileContent(file, config, i === processableFiles.length - 1);
-          allChildren.push(...fileContent);
+          // Read file content
+          const FileSystemService = require('./FileSystemService');
+          const fsService = new FileSystemService();
+          const fileContent = await fsService.readFileContent(file.path);
+
+          if (!fileContent.binary && !fileContent.truncated) {
+            // Split content into lines and create paragraphs
+            fileContent.content.split('\n').forEach(line => {
+              if (line.trim() === '') return;
+              paragraphs.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: line,
+                      size: 17,
+                    }),
+                  ],
+                  spacing: {
+                    after: 59,
+                  },
+                })
+              );
+            });
+          }
         } catch (error) {
           this.currentProgress.errors.push({
             file: file.path,
@@ -66,7 +73,21 @@ class DocumentGenerator {
         this.emitProgress();
       }
 
-      const doc = this.createDocumentWithContent(config, allChildren);
+      const doc = new Document({
+        sections: [{
+          properties: {
+            page: {
+              margin: {
+                top: 1440,    // 2.54厘米
+                right: 1440,
+                bottom: 1440,
+                left: 1440,
+              },
+            },
+          },
+          children: paragraphs,
+        }],
+      });
 
       // Generate output path
       const outputPath = this.generateOutputPath(config);
